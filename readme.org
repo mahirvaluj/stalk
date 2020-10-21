@@ -82,11 +82,12 @@
    know whether a message lost data.
 
    So there'll be a spack object in the clear containing a byte array
-   that is encrypted with some block cipher.
+   that is encrypted with some block cipher. Initially, I'll be using
+   AES-256.
    
-   I don't think I need any extra information, because the guarantees
-   are all provided by TCP.
+   I don't think I need any extra information, because the other
+   guarantees I care about are all provided by TCP.
 
 * Possible interesting facts in the future
-  This should theoretically actually allow multiplexing due to the
-  nature of the hashing at the start of message packets
+  I think it would be pretty easy to implement message multiplexing
+  with an extra hash.
