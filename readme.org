@@ -1,0 +1,51 @@
+* stalk
+  A peer-to-peer encrypted protocol at the application layer (over
+  TCP), using [[https://github.com/mahirvaluj/spack][spack]] for structured message passing.
+
+  The purpose of this protocol is mostly for myself to learn to
+  implement something of this type, but I will hopefully be using it
+  for other things as well.
+  
+* API
+  The API will be a message-based API, so most of the functionality (the
+  actual bundling into individual spack packets as well as their
+  transmission over TCP) is hidden from the programmer.
+  
+** Functions
+*** (~listen~ ~host~ ~port~ ~handler~)
+    Listen for connections at ~host~, on the given ~port~. 
+
+    You must pass ~handler~, which is a function which takes one
+    argument, a ~stalk-connection~ with which you can manage the
+    connection.
+
+*** (~connect~ ~ip~ ~port~)
+    Create a connection to ~ip~ on ~port~, and will return a
+    ~stalk-connection~ class (or ~nil~ on failure)
+
+*** (~send~ ~spack~ ~connection~)
+    This is a message based protocol, unlike TCP, which is a
+    bytestream-based one. To use it, create a ~spack~ object, push the
+    objects on it you want to be delivered as a unit, and this will
+    send them down the wire serialized and encrypted. 
+    
+*** Is this required?
+*** (~flush~ ~connection~)
+    Force the currently sent elements down the pipeline and out the
+    socket.
+   
+** Classes
+*** ~stalk-connection~
+    This is the catch-all class for connections from one node to another.
+**** Slots
+     - ~host~
+       - Host with which you're communicating
+     - ~port~
+       - Self-explanatory
+     - I'll add other things here later
+     - ~crypto-data~
+*** ~stalk
+       
+* How it works
+** Cryptography
+
