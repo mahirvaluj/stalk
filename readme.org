@@ -11,6 +11,13 @@
   actual bundling into individual spack packets as well as their
   transmission over TCP) is hidden from the programmer.
   
+  Another note on connections: this protocol is being built with the
+  idea of using it in a key-value store in the future, as well as in
+  conjoinment with a Kerberos-like authentication system. Therefore,
+  if you play your cards right, you should never have to authenticate
+  insecuretly (vulnerable to mitm), but I wanted to offer the
+  functionality.
+  
 ** Functions
 *** (~listen~ ~host~ ~port~ ~handler~)
     Listen for connections at ~host~, on the given ~port~. 
@@ -19,9 +26,19 @@
     argument, a ~stalk-connection~ with which you can manage the
     connection.
 
-*** (~connect~ ~ip~ ~port~)
-    Create a connection to ~ip~ on ~port~, and will return a
-    ~stalk-connection~ class (or ~nil~ on failure)
+*** (~connect~ ~host~ ~port~ &optional ~identity~ &key ~handler~)
+    Create a connection to ~ip~ on ~port~, attempting to connect to
+    ~identity~, and will return a ~stalk-connection~ class. If the
+    server you try to connect to's identity does not check out, then
+    will error out.
+
+    If identity is not provided, no authentication is done, and the
+    handshake is thus vulnerable to MITM attacks.
+
+**** TODO Failure?
+**** TODO rework handler?
+     Handler is optional, and is a function that will be run every time
+     a spack is recieved over the network. 
 
 *** (~send~ ~spack~ ~connection~)
     This is a message based protocol, unlike TCP, which is a
@@ -44,8 +61,32 @@
        - Self-explanatory
      - I'll add other things here later
      - ~crypto-data~
-*** ~stalk
+*** ~stalk-identity~
+**** Slots
+     - ~key~
+       - Public key of identity
+     - other info?
        
 * How it works
-** Cryptography
+  As a disclaimer, I care a lot about having no data corruption, and
+  so that will be a primary tenet of the protocol.
 
+** Connection establishment
+   If connecting with a known identity, user's private key will be 
+   Both parties will generate keys with which they will perform a
+   handshake and subsequently derive a session key. The session key
+   will subsequently be used in all communications.
+
+** Subsequent messages
+   These messages will be spack objects, which means that we already
+   know whether a message lost data.
+
+   So there'll be a spack object in the clear containing a byte array
+   that is encrypted with some block cipher.
+   
+   I don't think I need any extra information, because the guarantees
+   are all provided by TCP.
+
+* Possible interesting facts in the future
+  This should theoretically actually allow multiplexing due to the
+  nature of the hashing at the start of message packets
