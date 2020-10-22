@@ -24,7 +24,10 @@
 
     You must pass ~handler~, which is a function which takes one
     argument, a ~stalk-connection~ with which you can manage the
-    connection.
+    connection. 
+
+    In the function, you should set a callback for when spack objects
+    come down the wire.
 
 *** (~connect~ ~host~ ~port~ &optional ~identity~ &key ~handler~)
     Create a connection to ~ip~ on ~port~, attempting to connect to

@@ -10,16 +10,27 @@
 
 (in-package :stalk)
 
+;; There will be some kind of method to add a handler to a function
+
+;; when defining a listener, you'll pass a function to manage the
+;; connection, and in that function you'll be able to add a function
+;; that will be called with the spack objects coming down the socket
 (defclass stalk-connection ()
   ((host
     :accessor host
-    :initarg host)
+    :initarg :host)
    (ip
     :accessor ip
-    :initarg ip)
+    :initarg :ip)
    (identity
     :accessor id
-    :initarg id)))
+    :initarg :id)
+   (socket
+    :reader socket
+    :initarg :socket)
+   (spack-handler
+    :reader spack-handler
+    :initarg :spack-handler)))
 
 (defclass stalk-identity ()
   ((pubkey
@@ -85,7 +96,8 @@
                    :pubkey (ironclad:make-public-key :rsa :e pubkey :n modulus)
                    :privkey (ironclad:make-private-key :rsa :d privkey :n modulus))))
 
-(defun listener (host port handler)
+(defun listener (host port connection-handler)
+  
   )
 (defun connect (host port &optional identity &key handler))
 
