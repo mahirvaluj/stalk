@@ -79,6 +79,9 @@
    Both parties will generate keys with which they will perform a
    handshake and subsequently derive a session key. The session key
    will subsequently be used in all communications.
+   
+** Handshake
+   
 
 ** Subsequent messages
    These messages will be spack objects, which means that we already

@@ -9,7 +9,7 @@
 (defvar *id*)
 (defvar *port* 6434)
 (defvar *codes*
-  `((400 :bad-request) (401 :bad-handshake) (500 :crash)))
+  `((100 :enc-hello) (101 :dec-hello) (400 :bad-request) (401 :bad-handshake) (500 :crash)))
 (defun get-stat-code (keyword)
   (car (find-if #'(lambda (i) (eql keyword (cadr i))) *codes*)))
 (defun get-keyword (stat-code)
@@ -59,25 +59,56 @@
           #'(lambda ()
               (multiple-value-bind (peer-identity cryptosystem)
                   (unwind-protect
-                       (handshake (usocket:socket-accept socket))
+                       (handshake (usocket:socket-accept socket) identity)
                     (progn (send-error socket :bad-handshake) (return nil)))
                 (when peer-identity
                   (funcall connection-handler
                            (make-connection socket peer-identity cryptosystem identity)))))))))
 
-(defun handshake (sock)
-  (let ((state nil) (curr))
-    (unless (setf curr (spack:parse sock))
-      (error "connection error"))
-    (cond ((unencrypted-hello curr)
-           ())
-          ((encrypted-hello curr)
+(defun handshake (sock identity)
+  "Attempt to do a handshake, assuming proper formatting coming down
+the socket. This entire function throwing an error will throw an error
+back at the authenticator"
+  (let ((state nil) (curr (spack:parse sock)) (connection (make-instance 'stalk-connection)))
+    (cond ((eql (val (car (spack:elements curr))) 100)
+           (let* ((enc-buf (val (cadr (spack:elements curr))))
+                  (dec-buf (ironclad:decrypt-message (privkey identity) enc-buf :oaep t))
+                  (dec-spack (spack:parse dec-buf))
+                  (cryptosystem))
+             (destructuring-bind
+                   (peer-pubkey modulus algo keylen sym-pubkey) (map 'list #'(lambda (x) (spack:val x)) (spack:elements dec-spack))
+               (case algo
+                 ("curve25519" (multiple-value-bind (conn-privkey conn-pubkey)
+                                   (ironclad:generate-key-pair :curve25519 :num-bits keylen)
+                                 (ironclad:encrypt-message
+                                  (ironclad:make-public-key :rsa :e peer-pubkey :n modulus)
+                                  (setf cipher (ironclad:make-cipher :rsa :key (ironclad:diffie-hellman conn-privkey sym-pubkey)))
+                                  (destructuring-bind (_x raw-peer-pubkey) (ironclad:destructure-public-key conn-pubkey)
+                                    (declare (ignore _x))
+                                    (loop for i across
+                                         (spack:out
+                                          (spack:make-and-push
+                                           ((ironclad:encrypt-message (ironclad:make-public-key :rsa :e peer-pubkey :n modulus)
+                                                                      (spack:out
+                                                                       (spack:make-and-push
+                                                                        (conn-pubkey :byte-array)
+                                                                        ((length conn-pubkey) :integer))))
+                                            :byte-array)))
+                                       do (write-byte i (usocket:socket-stream sock)))
+                                    (force-output (socket-stream sock))
+                                   ;; Then, wait for acknowledgement
+                                   ;; of handshake, then we're done
+                                   ;; and can hand off the
+                                   ;; implementation
+                                    ))))
+                 (t (error "unsupported algo"))))))
+          ((eql (val (car (spack:elements))) 101)
            ())
           (t (error "bad hello")))))
 
 (defun send-error (sock error-keyword)
   (let ((sp (make-instance 'spack)))
-    (spush (get-stat-code error-keyword))
+    (spack:spush (get-stat-code error-keyword) :integer sp)
     (loop for i across (spack:out sp) do
          (write-byte i sock))
     (force-output sock)
