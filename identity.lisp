@@ -28,7 +28,7 @@
 
 (defun make-identity (&key (keysize 2048))
   (multiple-value-bind (privkey pubkey) (ironclad:generate-key-pair :rsa :num-bits keysize)
-    (make-instance 'stalk-identity :pubkey pubkey :privkey privkey)))
+    (make-instance 'stalk-identity :pubkey pubkey :privkey privkey :keysize keysize)))
 
 (defun save-identity-to-files (identity pubkey-path privkey-path)
   (with-open-file (f pubkey-path :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
