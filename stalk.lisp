@@ -41,9 +41,6 @@
     :accessor cipher
     :initarg :cipher)))
 
-(defmethod register-spack-handler ((conn stalk-connection) (f function))
-  )
-
 (defun make-connection (sock peer-identity cipher identity)
   (make-instance 'stalk-connection
                  :host (usocket:get-peer-address sock)
@@ -187,7 +184,7 @@ back at the authenticator"
 (defun send (pack connection)
   (let ((buf (to-simple-bytearray (spack:out pack))))
     (ironclad:encrypt-in-place (cipher connection) buf)
-    (loop for i in (spack:out (spack:make-and-push (buf :byte-array)))
+    (loop for i across (spack:out (spack:make-and-push (buf :byte-array)))
        do
          (write-byte i (usocket:socket-stream (socket connection))))))
 
