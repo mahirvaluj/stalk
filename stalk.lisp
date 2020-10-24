@@ -55,17 +55,13 @@
 
 (defun listener (host port connection-handler &key (identity *default-identity*))
   (let ((socket (usocket:socket-listen host port :element-type '(unsigned-byte 8))))
-    (loop do 
+    (loop do
          (let ((sock (usocket:socket-accept socket)))
            (format t "~A~%" sock)
            (let ((connection (server-handshake sock identity)))
-             (return-from listener connection)
-             ;; (push (bt:make-thread
-
-             ;;            (when (peer-identity connection)
-             ;;              (funcall connection-handler connection))))
-             ;;       *connection-threads*)
-             )))))
+             (push (bt:make-thread
+                    #'(lambda () (funcall connection-handler connection)))
+                   *connection-threads*))))))
 
 (defun server-handshake (sock identity)
   "Attempt to do a handshake, assuming proper formatting coming down
@@ -83,10 +79,9 @@ back at the authenticator"
         (ironclad:generate-key-pair :curve25519 :compatible-with-key
                                     (ironclad:make-public-key :curve25519 :y sym-peer-pubkey-raw)))
       (setf cipher (ironclad:make-cipher
-                    :aes :mode :ctr :initialization-vector (to-simple-bytearray init-vec)
+                    :aes :mode :ofb :initialization-vector (to-simple-bytearray init-vec)
                     :key (ironclad:diffie-hellman sym-server-privkey
                                                   (ironclad:make-public-key :curve25519 :y (to-simple-bytearray sym-peer-pubkey-raw))))))
-    (format t "Got hello from client~%")
     (loop for i across (spack:out (spack:make-and-push
                                    (101 :integer)
                                    ((cadr (ironclad:destructure-public-key sym-server-pubkey))
@@ -100,18 +95,16 @@ back at the authenticator"
     (usocket:wait-for-input sock)
     (spack:destructuring-elements (msg) (spack:parse (usocket:socket-stream sock))
       (setf msg (to-simple-bytearray msg))
-      (let ((plaintext (make-array (length msg) :element-type '(unsigned-byte 8))))
-        (multiple-value-bind (a b) (ironclad:decrypt-in-place cipher msg) (format t "A ~D  B ~D~%" a b))
-        (return-from server-handshake msg)
-        (spack:destructuring-elements (code) (spack:parse plaintext)
-          (unless (= code 102) (error "bad code in confirmation"))
-          (make-instance 'stalk-connection
-                         :cipher cipher
-                         :socket sock
-                         :identity identity
-                         :peer-identity client-id
-                         :port (usocket:get-peer-port sock)
-                         :host (usocket:get-peer-name sock)))))))
+      (multiple-value-bind (a b) (ironclad:decrypt-in-place cipher msg) (format t "A ~D  B ~D~%" a b))
+      (spack:destructuring-elements (code) (spack:parse msg)
+        (unless (= code 102) (error "bad code in confirmation"))
+        (make-instance 'stalk-connection
+                       :cipher cipher
+                       :socket sock
+                       :identity identity
+                       :peer-identity client-id
+                       :port (usocket:get-peer-port sock)
+                       :host (usocket:get-peer-name sock))))))
 
 (defun to-simple-bytearray (a)
   (let ((b (make-array (length a) :element-type '(unsigned-byte 8))))
@@ -160,20 +153,19 @@ back at the authenticator"
       (assert (= code 101))
       (unless (ironclad:verify-signature (pubkey server-identity) sym-server-pubkey-raw signature)
         (error "FAIL: Server identity check failed. Double check the public key."))
-      (setf cipher (ironclad:make-cipher :aes :mode :ctr :initialization-vector init-vec
+      (setf cipher (ironclad:make-cipher :aes :mode :ofb :initialization-vector init-vec
                                          :key (ironclad:diffie-hellman
                                                sym-client-privkey
                                                (ironclad:make-public-key :curve25519
                                                                          :y sym-server-pubkey-raw)))))
-    (let* ((buf (spack:out (spack:make-and-push (102 :integer))))
-           (ciphertext (make-array (* 128 (ceiling (/ (length buf) 128))) :element-type '(unsigned-byte 8))))
+    (let* ((buf (spack:out (spack:make-and-push (102 :integer)))))
       (ironclad:encrypt-in-place cipher buf)
-      (let ((outbuf (spack:out (spack:make-and-push (ciphertext :byte-array)))))
+      (format t "~A~%" buf)
+      (let ((outbuf (spack:out (spack:make-and-push (buf :byte-array)))))
         (loop for i across outbuf
            do
              (write-byte i (usocket:socket-stream sock)))
-        (force-output (usocket:socket-stream sock))
-        (return-from client-handshake (list buf outbuf ciphertext)))
+        (force-output (usocket:socket-stream sock)))
       (make-instance 'stalk-connection
                      :cipher cipher
                      :socket sock
@@ -182,8 +174,23 @@ back at the authenticator"
                      :port (usocket:get-peer-port sock)
                      :host (usocket:get-peer-name sock)))))
 
+(defun wait-for-input (connection)
+  (usocket:wait-for-input (socket connection))
+  )
 
-(defun send (spack connection))
+(defun recv (connection)
+  (spack:destructuring-elements (msg) (spack:parse (usocket:socket-stream (socket connection)))
+    (setf msg (to-simple-bytearray msg))
+    (ironclad:decrypt-in-place (cipher connection) msg)
+    (spack:parse msg)))
 
-(defun flush (connection))
+(defun send (pack connection)
+  (let ((buf (to-simple-bytearray (spack:out pack))))
+    (ironclad:encrypt-in-place (cipher connection) buf)
+    (loop for i in (spack:out (spack:make-and-push (buf :byte-array)))
+       do
+         (write-byte i (usocket:socket-stream (socket connection))))))
+
+(defun flush (connection)
+  (force-output (usocket:socket-stream (socket connection))))
 
