@@ -15,44 +15,51 @@
   idea of using it in a key-value store in the future, as well as in
   conjoinment with a Kerberos-like authentication system. Therefore,
   if you play your cards right, you should never have to authenticate
-  insecuretly (vulnerable to mitm), but I wanted to offer the
+  insecurely (vulnerable to mitm), but I wanted to offer the
   functionality.
   
 ** Functions
-*** (~listen~ ~host~ ~port~ ~handler~)
+*** ~(listener~ ~host~ ~port~ ~handler)~
     Listen for connections at ~host~, on the given ~port~. 
 
     You must pass ~handler~, which is a function which takes one
-    argument, a ~stalk-connection~ with which you can manage the
+    argument, a ~stalk:connection~ with which you can manage the
     connection. 
 
-    In the function, you should set a callback for when spack objects
-    come down the wire.
+    There's an example ~debug-handler~ in ~stalk.lisp~ to show an
+    example of printing objects to ~*debug-io*~ as they arrive.
 
-*** (~connect~ ~host~ ~port~ &optional ~identity~ &key ~handler~)
-    Create a connection to ~ip~ on ~port~, attempting to connect to
-    ~identity~, and will return a ~stalk-connection~ class. If the
-    server you try to connect to's identity does not check out, then
-    will error out.
+*** ~(connect host port &key (identity *default-identity*) server-identity)~
+    Create a connection to ~host~ on ~port~, attempting to connect
+    with ~identity~, connecting to ~server-identity~. At project load,
+    ~*default-identity*~ will be attempted to be loaded from
+    ~/.spack/id_pub~ and ~/.spack/id_priv~. If ~server-identity~ is
+    omitted, a handshake is done without verifying the authenticity of
+    the server.
+
+    The function returns a ~stalk-connection~ class. If the server you
+    try to connect to's identity does not check out, then will error
+    out.
 
     If identity is not provided, no authentication is done, and the
     handshake is thus vulnerable to MITM attacks.
+    
+    Otherwise, there is a Diffie-Hellman key exchange with curve25519
+    signed with RSA 2048-bit that is done to authenticate the server
+    as well as to allow for an AES-256 (OFB) channel to be opened.
 
-**** TODO Failure?
-**** TODO rework handler?
-     Handler is optional, and is a function that will be run every time
-     a spack is recieved over the network. 
+**** TODO Better Failure Handling
 
-*** (~send~ ~spack~ ~connection~)
+*** ~(send spack connection)~
     This is a message based protocol, unlike TCP, which is a
     bytestream-based one. To use it, create a ~spack~ object, push the
     objects on it you want to be delivered as a unit, and this will
     send them down the wire serialized and encrypted. 
     
-*** Is this required?
 *** (~flush~ ~connection~)
     Force the currently sent elements down the pipeline and out the
-    socket.
+    socket. If you don't do this, I don't know if they'll ever send
+    (or at least not until you enqueue a ton of them up)
    
 ** Classes
 *** ~stalk-connection~
@@ -64,36 +71,14 @@
        - Self-explanatory
      - I'll add other things here later
      - ~crypto-data~
-*** ~stalk-identity~
+*** ~identity~
 **** Slots
-     - ~key~
-       - Public key of identity
-     - other info?
+     - ~pubkey~
+       - An ~ironclad:public-key~.
+     - ~privkey~
+       - Kinda self-explanatory, no?
+     - ~keysize~
+       - This isn't particularly required, and I don't believe it is
+         exposed in the library :^)
        
-* How it works
-  As a disclaimer, I care a lot about having no data corruption, and
-  so that will be a primary tenet of the protocol.
-
-** Connection establishment
-   If connecting with a known identity, user's private key will be 
-   Both parties will generate keys with which they will perform a
-   handshake and subsequently derive a session key. The session key
-   will subsequently be used in all communications.
-   
-** Handshake
-   
-
-** Subsequent messages
-   These messages will be spack objects, which means that we already
-   know whether a message lost data.
-
-   So there'll be a spack object in the clear containing a byte array
-   that is encrypted with some block cipher. Initially, I'll be using
-   AES-256.
-   
-   I don't think I need any extra information, because the other
-   guarantees I care about are all provided by TCP.
-
-* Possible interesting facts in the future
-  I think it would be pretty easy to implement message multiplexing
-  with an extra hash.
+         

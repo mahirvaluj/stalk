@@ -209,4 +209,3 @@ back at the authenticator"
 
 (defun flush (connection)
   (force-output (usocket:socket-stream (socket connection))))
-
