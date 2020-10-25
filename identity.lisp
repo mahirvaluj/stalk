@@ -1,6 +1,6 @@
 (in-package :stalk)
 
-(defclass stalk-identity ()
+(defclass identity ()
   ((pubkey
     :accessor pubkey
     :initarg :pubkey)

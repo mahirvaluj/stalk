@@ -9,6 +9,7 @@
 (defvar *id*)
 
 (defvar *connection-threads* nil)
+(defvar *server* nil)
 
 (defvar *codes*
   `((100 :handshake-hello) (101 :handshake-ack) (102 :handshake-ack-fin)
@@ -52,13 +53,24 @@
 
 (defun listener (host port connection-handler &key (identity *default-identity*))
   (let ((socket (usocket:socket-listen host port :element-type '(unsigned-byte 8))))
-    (loop do
-         (let ((sock (usocket:socket-accept socket)))
-           (format t "~A~%" sock)
-           (let ((connection (server-handshake sock identity)))
-             (push (bt:make-thread
-                    #'(lambda () (funcall connection-handler connection)))
-                   *connection-threads*))))))
+    (setf *server* (bt:make-thread
+                   #'(lambda ()
+                       (loop do
+                            (let ((sock (usocket:socket-accept socket)))
+                              (push (bt:make-thread
+                                     #'(lambda ()
+                                         (format *debug-io* "~A~%" sock)
+                                         (let ((connection (server-handshake sock identity)))
+                                           (funcall connection-handler connection)))
+                                     :name "thread!")
+                                    *connection-threads*))))))))
+
+(defun debug-handler (connection)
+  "This is for me to test sending objects!"
+  (format *debug-io* "I got a connection! ~A ~%" connection)
+  (loop do
+       (wait-for-input connection)
+       (format *debug-io* "~A~%" (map 'list #'(lambda (x) (spack:val x)) (spack:elements (recv connection))))))
 
 (defun server-handshake (sock identity)
   "Attempt to do a handshake, assuming proper formatting coming down
@@ -68,7 +80,7 @@ back at the authenticator"
     (spack:destructuring-elements (code client-id-pubkey client-id-modulus sym-peer-pubkey-raw init-vec signature)
         (spack:parse (usocket:socket-stream sock))
       (assert (= code 100))
-      (setf client-id (make-instance 'stalk-identity
+      (setf client-id (make-instance 'identity
                                      :pubkey (ironclad:make-public-key :rsa :e client-id-pubkey :n client-id-modulus)))
       (unless (ironclad:verify-signature (pubkey client-id) (to-simple-bytearray sym-peer-pubkey-raw) (to-simple-bytearray signature))
         (error "signature of public key failed"))
@@ -79,15 +91,19 @@ back at the authenticator"
                     :aes :mode :ofb :initialization-vector (to-simple-bytearray init-vec)
                     :key (ironclad:diffie-hellman sym-server-privkey
                                                   (ironclad:make-public-key :curve25519 :y (to-simple-bytearray sym-peer-pubkey-raw))))))
-    (loop for i across (spack:out (spack:make-and-push
-                                   (101 :integer)
-                                   ((cadr (ironclad:destructure-public-key sym-server-pubkey))
-                                    :byte-array)
-                                   ((ironclad:sign-message (privkey identity)
-                                                           (cadr (ironclad:destructure-public-key sym-server-pubkey)))
-                                    :byte-array)))
-       do
-         (write-byte i (usocket:socket-stream sock)))
+    (destructuring-bind (_e server-pubkey-e _n server-pubkey-mod) (ironclad:destructure-public-key (pubkey identity))
+      (declare (ignore _e _n))
+      (loop for i across (spack:out (spack:make-and-push
+                                     (101 :integer)
+                                     ((cadr (ironclad:destructure-public-key sym-server-pubkey))
+                                      :byte-array)
+                                     (server-pubkey-e :integer)
+                                     (server-pubkey-mod :integer)
+                                     ((ironclad:sign-message (privkey identity)
+                                                             (cadr (ironclad:destructure-public-key sym-server-pubkey)))
+                                      :byte-array)))
+         do
+           (write-byte i (usocket:socket-stream sock))))
     (force-output (usocket:socket-stream sock))
     (usocket:wait-for-input sock)
     (spack:destructuring-elements (msg) (spack:parse (usocket:socket-stream sock))
@@ -145,9 +161,13 @@ back at the authenticator"
                  ))
     (force-output (usocket:socket-stream sock))
     (usocket:wait-for-input sock)
-    (spack:destructuring-elements (code sym-server-pubkey-raw signature)
+    (spack:destructuring-elements (code sym-server-pubkey-raw server-pubkey-raw server-modulo-raw signature)
         (spack:parse (usocket:socket-stream sock))
       (assert (= code 101))
+      (when (null server-identity)
+        (setf server-identity (make-instance 'identity
+                                             :pubkey (ironclad:make-public-key
+                                                      :rsa :e server-pubkey-raw :n server-modulo-raw))))
       (unless (ironclad:verify-signature (pubkey server-identity) sym-server-pubkey-raw signature)
         (error "FAIL: Server identity check failed. Double check the public key."))
       (setf cipher (ironclad:make-cipher :aes :mode :ofb :initialization-vector init-vec
@@ -172,8 +192,7 @@ back at the authenticator"
                      :host (usocket:get-peer-name sock)))))
 
 (defun wait-for-input (connection)
-  (usocket:wait-for-input (socket connection))
-  )
+  (usocket:wait-for-input (socket connection)))
 
 (defun recv (connection)
   (spack:destructuring-elements (msg) (spack:parse (usocket:socket-stream (socket connection)))
