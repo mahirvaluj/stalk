@@ -11,9 +11,9 @@
   This is pre-alpha level. Do not use this for anything serious.
   
 * API
-  The API will be a message-based API, so most of the functionality (the
-  actual bundling into individual spack packets as well as their
-  transmission over TCP) is hidden from the programmer.
+  The API is a message-based API, so the programmer builds ~spack~
+  packets and those then get sent over the wire, the serialization is
+  hidden from the programmer.
   
   Another note on connections: this protocol is being built with the
   idea of using it in a key-value store in the future, as well as in
