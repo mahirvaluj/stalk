@@ -23,7 +23,7 @@
   functionality.
   
 ** Functions
-*** ~(listener~ ~host~ ~port~ ~handler)~
+*** ~(listener host port handler)~
     Listen for connections at ~host~, on the given ~port~. 
 
     You must pass ~handler~, which is a function which takes one
@@ -73,8 +73,15 @@
        - Host with which you're communicating
      - ~port~
        - Self-explanatory
-     - I'll add other things here later
-     - ~crypto-data~
+     - ~peer-identity~
+       - An ~identity~ class (seen below) for the peer of the connection
+     - identity
+       - Your ~identity~ in the connection
+     - ~socket~
+       - A ~usocket-stream-socket~ that you're transmitting over
+     - ~cipher~
+       - The ~ironclad:cipher~ used during your connections
+         
 *** ~identity~
 **** Slots
      - ~pubkey~

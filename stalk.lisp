@@ -35,9 +35,6 @@
    (socket
     :reader socket
     :initarg :socket)
-   (spack-handler
-    :reader spack-handler
-    :initarg :spack-handler)
    (cipher
     :accessor cipher
     :initarg :cipher)))
