@@ -60,7 +60,7 @@
     objects on it you want to be delivered as a unit, and this will
     send them down the wire serialized and encrypted. 
     
-*** (~flush~ ~connection~)
+*** ~(flush connection)~
     Force the currently sent elements down the pipeline and out the
     socket. If you don't do this, I don't know if they'll ever send
     (or at least not until you enqueue a ton of them up)
