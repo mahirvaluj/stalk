@@ -4,7 +4,11 @@
 
   The purpose of this protocol is mostly for myself to learn to
   implement something of this type, but I will hopefully be using it
-  for other things as well.
+  for other things (academically, I don't trust my own crypto use) as
+  well.
+
+* Disclaimer
+  This is pre-alpha level. Do not use this for anything serious.
   
 * API
   The API will be a message-based API, so most of the functionality (the
